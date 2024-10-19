@@ -40,6 +40,7 @@ func main() {
 			printBlockchain()
 		}
 	}
+
 }
 
 func startServer() {

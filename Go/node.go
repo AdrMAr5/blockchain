@@ -40,7 +40,6 @@ func (n *Node) BroadcastNewBlock(block *Block) {
 			if err != nil {
 				if err.Error() == "invalid block" {
 					fmt.Printf("Peer %s rejected block\n", peer)
-					n.RequestChain(peer)
 				} else {
 					fmt.Printf("Error sending block to peer %s: %v\n", peer, err)
 				}
