@@ -20,9 +20,6 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	address := scanner.Text()
-	if address == "" {
-		address = "localhost:3000"
-	}
 
 	node = NewNode(address)
 
@@ -61,12 +58,9 @@ func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = node.ReceiveBlock(&block)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+	node.ReceiveBlock(&block)
 	printBlockchain()
+	w.WriteHeader(http.StatusOK)
 }
 
 func handleGetChain(w http.ResponseWriter, r *http.Request) {

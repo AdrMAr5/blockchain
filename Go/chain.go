@@ -50,10 +50,10 @@ func (c *Chain) IsValidNewBlock(newBlock, prevBlock *Block) bool {
 		fmt.Println("invalid previous hash")
 		return false
 	}
-	//if newBlock.calculateHash() != newBlock.Hash {
-	//	fmt.Println("invalid hash")
-	//	return false
-	//}
+	if newBlock.calculateHash() != newBlock.Hash {
+		fmt.Println("invalid hash")
+		return false
+	}
 	return true
 }
 

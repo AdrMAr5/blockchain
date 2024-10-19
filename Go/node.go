@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -33,50 +32,33 @@ func (n *Node) AddPeer(address string) {
 }
 
 func (n *Node) BroadcastNewBlock(block *Block) {
-
 	for _, peer := range n.Peers {
-		go func() {
-			err := n.sendBlock(peer, block)
-			if err != nil {
-				if err.Error() == "invalid block" {
-					fmt.Printf("Peer %s rejected block\n", peer)
-				} else {
-					fmt.Printf("Error sending block to peer %s: %v\n", peer, err)
-				}
-			}
-		}()
+		go n.sendBlock(peer, block)
 	}
-
 }
 
-func (n *Node) sendBlock(peer string, block *Block) error {
+func (n *Node) sendBlock(peer string, block *Block) {
 	writer := new(bytes.Buffer)
 	err := block.ToJson(writer)
 	if err != nil {
 		fmt.Printf("Error marshaling block: %v\n", err)
-		return errors.New("error marshaling block")
+		return
 	}
 
 	resp, err := http.Post(fmt.Sprintf("http://%s/receiveBlock", peer), "application/json", bytes.NewBuffer(writer.Bytes()))
 	if err != nil {
 		fmt.Printf("Error sending block to peer %s: %v\n", peer, err)
-		return errors.New("error sending block")
-	}
-	if resp.StatusCode != http.StatusBadRequest {
-		return errors.New("invalid block")
+		return
 	}
 	defer resp.Body.Close()
-	return nil
 }
 
-func (n *Node) ReceiveBlock(block *Block) error {
+func (n *Node) ReceiveBlock(block *Block) {
 	if n.Chain.IsValidNewBlock(block, n.Chain.Blocks[len(n.Chain.Blocks)-1]) {
 		n.Chain.AddBlockFromPeer(block)
 		fmt.Printf("Received and added new block: %s\n", block)
-		return nil
 	} else {
 		fmt.Printf("Received invalid block: %s\n", block)
-		return errors.New("Invalid block")
 	}
 }
 
