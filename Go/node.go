@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"slices"
 	"sync"
 )
 
@@ -25,9 +26,13 @@ func NewNode(address string) *Node {
 }
 
 func (n *Node) AddPeer(address string) {
+	if slices.Contains(n.Peers, address) {
+		return
+	}
 	fmt.Printf("Adding peer: %s\n", address)
 	n.mu.Lock()
 	defer n.mu.Unlock()
+
 	n.Peers = append(n.Peers, address)
 }
 
@@ -54,11 +59,18 @@ func (n *Node) sendBlock(peer string, block *Block) {
 }
 
 func (n *Node) ReceiveBlock(block *Block) {
-	if n.Chain.IsValidNewBlock(block, n.Chain.Blocks[len(n.Chain.Blocks)-1]) {
+	lastBlock := n.Chain.Blocks[len(n.Chain.Blocks)-1]
+
+	if block.Index == lastBlock.Index+1 && n.Chain.IsValidNewBlock(block, lastBlock) {
 		n.Chain.AddBlockFromPeer(block)
-		fmt.Printf("Received and added new block: %s\n", block)
+		cancelMining <- struct{}{}
+		n.Chain.Print()
+	} else if block.Index > lastBlock.Index+1 {
+		// We're behind, request the full chain
+		n.RequestChain(n.Peers[0]) // Assuming the first peer is always valid
 	} else {
-		fmt.Printf("Received invalid block: %s\n", block)
+		// The received block is behind or invalid, ignore it
+		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
 	}
 }
 
@@ -87,7 +99,16 @@ func (n *Node) RequestChain(peer string) {
 	if err != nil {
 		fmt.Printf("Error replacing chain: %v\n", err)
 	} else {
-		fmt.Println("Chain replaced with new chain from peer")
+		fmt.Println("Chain replaced with new chain from peer\n")
 	}
 
+	if len(newChain.Blocks) > len(n.Chain.Blocks) && newChain.IsValidChain() {
+		err = n.Chain.ReplaceChain(&newChain)
+		if err != nil {
+			fmt.Printf("Error replacing chain: %v\n", err)
+		} else {
+			fmt.Println("Chain replaced with new chain from peer\n")
+			cancelMining <- struct{}{} // Cancel current mining operation
+		}
+	}
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -17,6 +16,11 @@ func NewChain() *Chain {
 	chain.createGenesisBlock()
 	return chain
 }
+func (c *Chain) Print() {
+	for i := 0; i < len(c.Blocks); i++ {
+		fmt.Printf("%d: %s\n", c.Blocks[i].Index, c.Blocks[i].String())
+	}
+}
 
 func (c *Chain) createGenesisBlock() {
 	genesisBlock := NewBlock(0, "Genesis Block", [32]byte{})
@@ -26,16 +30,20 @@ func (c *Chain) createGenesisBlock() {
 func (c *Chain) AddBlock(data string) *Block {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
 	prevBlock := c.Blocks[len(c.Blocks)-1]
 	newBlock := NewBlock(prevBlock.Index+1, data, prevBlock.Hash)
+	if newBlock == nil {
+		return nil
+	}
 	if c.IsValidNewBlock(newBlock, prevBlock) {
 		c.Blocks = append(c.Blocks, newBlock)
+		fmt.Printf("Adding my mined block %d\n", newBlock.Index)
 		return newBlock
 	}
 	return nil
 }
 func (c *Chain) AddBlockFromPeer(block *Block) {
+	fmt.Printf("Adding block from peer, %d\n", block.Index)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Blocks = append(c.Blocks, block)
@@ -43,15 +51,11 @@ func (c *Chain) AddBlockFromPeer(block *Block) {
 
 func (c *Chain) IsValidNewBlock(newBlock, prevBlock *Block) bool {
 	if prevBlock.Index+1 != newBlock.Index {
-		fmt.Println("invalid index")
+		fmt.Printf("invalid indexes: %d and %d\n", prevBlock.Index, newBlock.Index)
 		return false
 	}
 	if prevBlock.Hash != newBlock.PreviousHash {
 		fmt.Println("invalid previous hash")
-		return false
-	}
-	if newBlock.calculateHash() != newBlock.Hash {
-		fmt.Println("invalid hash")
 		return false
 	}
 	return true
@@ -67,9 +71,9 @@ func (c *Chain) IsValidChain() bool {
 }
 
 func (c *Chain) ReplaceChain(newChain *Chain) error {
-	if !newChain.IsValidChain() {
-		return errors.New("invalid chain")
-	}
+	//if !newChain.IsValidChain() {
+	//	return errors.New("invalid chain")
+	//}
 	c.mu.Lock()
 	c.Blocks = newChain.Blocks
 	c.mu.Unlock()

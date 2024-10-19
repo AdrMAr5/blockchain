@@ -9,17 +9,25 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const Difficulty = 23
 
 var node *Node
+var cancelMining = make(chan struct{})
 
 func main() {
 	fmt.Print("Enter the address for this node (e.g., localhost:3000): ")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	address := scanner.Text()
+	if address == "" {
+		address = "localhost:3000"
+	}
+	if address == "1" {
+		address = "localhost:3001"
+	}
 
 	node = NewNode(address)
 
@@ -29,12 +37,21 @@ func main() {
 		node.RequestChain("localhost:3000")
 	}
 	for {
-		blockData := strconv.Itoa(rand.Int())
-		block := node.Chain.AddBlock(blockData)
-		if block != nil {
-			node.BroadcastNewBlock(block)
-			fmt.Println("New block added and broadcasted to peers")
-			printBlockchain()
+		select {
+		case <-cancelMining:
+			fmt.Println("Mining stopped")
+			time.Sleep(time.Second)
+		default:
+			blockData := strconv.Itoa(rand.Int())
+
+			block := node.Chain.AddBlock(blockData)
+			if block != nil {
+				node.BroadcastNewBlock(block)
+				fmt.Println("New block added and broadcasted to peers\n")
+				fmt.Println(block.String())
+			}
+
+			time.Sleep(time.Second * 5) // Wait 5 seconds between mining attempts
 		}
 	}
 
@@ -52,6 +69,7 @@ func startServer() {
 }
 
 func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
+
 	var block Block
 	err := block.FromJson(r.Body)
 	if err != nil {
@@ -59,18 +77,19 @@ func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	node.ReceiveBlock(&block)
-	printBlockchain()
+	//fmt.Printf("received block: %s\n", block.String())
 	w.WriteHeader(http.StatusOK)
+
 }
 
 func handleGetChain(w http.ResponseWriter, r *http.Request) {
 	srcHost := r.PathValue("host")
+
 	node.AddPeer(srcHost)
 	err := json.NewEncoder(w).Encode(node.Chain)
 	if err != nil {
 		return
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 func printBlockchain() {
