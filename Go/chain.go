@@ -14,18 +14,22 @@ type Chain struct {
 }
 
 func NewChain() *Chain {
-	chain := &Chain{}
+	chain := &Chain{Candidates: make([]*Block, 0)}
 	chain.createGenesisBlock()
 	return chain
 }
+
+// function to get block from Candidates by hash
 func (c *Chain) getCandidateByHash(hash [32]byte) *Block {
-	for _, block := range node.Chain.Candidates {
+	for _, block := range c.Candidates {
 		if block.Hash == hash {
 			return block
 		}
 	}
 	return nil
+
 }
+
 func (c *Chain) Print() {
 	for i := 0; i < len(c.Blocks); i++ {
 		fmt.Printf("%d: %s\n", c.Blocks[i].Index, c.Blocks[i].String())

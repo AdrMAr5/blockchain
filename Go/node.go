@@ -78,7 +78,7 @@ func (n *Node) sendBlock(peer string, block *Block) error {
 		return err
 	}
 
-	resp, err := http.Post(fmt.Sprintf("http://%s/receiveBlock", peer), "application/json", bytes.NewBuffer(writer.Bytes()))
+	resp, err := http.Post(fmt.Sprintf("http://%s/receiveBlock/%s", peer, n.Address), "application/json", bytes.NewBuffer(writer.Bytes()))
 	if err != nil {
 		fmt.Printf("Error sending block to peer %s: %v\n", peer, err)
 		return err

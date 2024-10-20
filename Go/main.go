@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const Difficulty = 20
+const Difficulty = 22
 
 var node *Node
 var cancelMining = make(chan struct{})
@@ -28,6 +28,9 @@ func main() {
 	if address == "1" {
 		address = "localhost:3001"
 	}
+	if address == "2" {
+		address = "localhost:3002"
+	}
 
 	node = NewNode(address)
 	canMine = true
@@ -39,6 +42,7 @@ func main() {
 	}
 
 	for {
+
 		if canMine {
 			prevBlock := node.Chain.Blocks[len(node.Chain.Blocks)-1]
 
@@ -75,7 +79,7 @@ func startServer() {
 
 // cheks if block can be added and return appropirate error
 func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Received block from peer")
+	fmt.Printf("Received block from peer %s", r.PathValue("host"))
 	canMine = false
 	cancelMining <- struct{}{}
 	var block Block
@@ -123,12 +127,12 @@ func handleSetBlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fromCandidates := node.Chain.getCandidateByHash(block.Hash)
-	if fromCandidates == nil {
-		http.Error(w, "block not found in candidates", http.StatusNotFound)
-		return
-	}
-	node.Chain.AddBlock(fromCandidates)
+	//fromCandidates := node.Chain.getCandidateByHash(block.Hash)
+	//if fromCandidates == nil {
+	//	http.Error(w, "block not found in candidates", http.StatusNotFound)
+	//	return
+	//}
+	node.Chain.AddBlock(&block)
 	canMine = true
 	fmt.Println("block added to blockchain")
 	w.WriteHeader(http.StatusOK)
