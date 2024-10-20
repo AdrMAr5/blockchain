@@ -46,7 +46,10 @@ func (c *Chain) AddBlockFromPeer(block *Block) {
 	fmt.Printf("Adding block from peer, %d\n", block.Index)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.Blocks = append(c.Blocks, block)
+	prevBlock := c.Blocks[len(c.Blocks)-1]
+	if c.IsValidNewBlock(block, prevBlock) {
+		c.Blocks = append(c.Blocks, block)
+	}
 }
 
 func (c *Chain) IsValidNewBlock(newBlock, prevBlock *Block) bool {

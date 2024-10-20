@@ -26,10 +26,12 @@ func NewBlock(index int, data string, previousHash [32]byte) *Block {
 		PreviousHash: previousHash,
 	}
 	err := block.Mine(Difficulty)
+
 	if err != nil {
 		fmt.Printf("Error mining block: %v\n", err)
 		return nil
 	}
+	block.Timestamp = time.Now().Unix()
 	return block
 }
 
@@ -37,14 +39,18 @@ func (b *Block) Mine(difficulty int) error {
 	target := new(big.Int).Lsh(big.NewInt(1), uint(256-difficulty))
 
 	for {
+		select {
+		case <-cancelMining:
+			return fmt.Errorf(`cancel mining`)
+		default:
+			b.Hash = b.calculateHash()
+			hashInt := new(big.Int).SetBytes(b.Hash[:])
 
-		b.Hash = b.calculateHash()
-		hashInt := new(big.Int).SetBytes(b.Hash[:])
-
-		if hashInt.Cmp(target) == -1 {
-			return nil
+			if hashInt.Cmp(target) == -1 {
+				return nil
+			}
+			b.Nonce++
 		}
-		b.Nonce++
 	}
 
 }

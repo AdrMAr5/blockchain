@@ -61,10 +61,13 @@ func (n *Node) sendBlock(peer string, block *Block) {
 func (n *Node) ReceiveBlock(block *Block) {
 	lastBlock := n.Chain.Blocks[len(n.Chain.Blocks)-1]
 
+	if block.Index == lastBlock.Index && block.Timestamp < lastBlock.Timestamp {
+		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
+		n.Chain.Blocks[len(n.Chain.Blocks)-1] = block
+	}
 	if block.Index == lastBlock.Index+1 && n.Chain.IsValidNewBlock(block, lastBlock) {
 		n.Chain.AddBlockFromPeer(block)
 		cancelMining <- struct{}{}
-		n.Chain.Print()
 	} else if block.Index > lastBlock.Index+1 {
 		// We're behind, request the full chain
 		n.RequestChain(n.Peers[0]) // Assuming the first peer is always valid

@@ -37,22 +37,16 @@ func main() {
 		node.RequestChain("localhost:3000")
 	}
 	for {
-		select {
-		case <-cancelMining:
-			fmt.Println("Mining stopped")
-			time.Sleep(time.Second)
-		default:
-			blockData := strconv.Itoa(rand.Int())
+		blockData := strconv.Itoa(rand.Int())
+		block := node.Chain.AddBlock(blockData)
+		if block != nil {
+			node.BroadcastNewBlock(block)
+			fmt.Println("New block added and broadcasted to peers\n")
 
-			block := node.Chain.AddBlock(blockData)
-			if block != nil {
-				node.BroadcastNewBlock(block)
-				fmt.Println("New block added and broadcasted to peers\n")
-				fmt.Println(block.String())
-			}
-
-			time.Sleep(time.Second * 5) // Wait 5 seconds between mining attempts
 		}
+		node.Chain.Print()
+		time.Sleep(time.Second * 5) // Wait 5 seconds between mining attempts
+
 	}
 
 }
