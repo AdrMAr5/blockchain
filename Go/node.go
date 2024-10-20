@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -36,46 +37,105 @@ func (n *Node) AddPeer(address string) {
 	n.Peers = append(n.Peers, address)
 }
 
-func (n *Node) BroadcastNewBlock(block *Block) {
+func (n *Node) BroadcastAndSetNewBlock(block *Block) error {
+	var errs []error
 	for _, peer := range n.Peers {
-		go n.sendBlock(peer, block)
+		err := n.sendBlock(peer, block)
+		if err != nil {
+			if err.Error() == "invalid previous hash" {
+				fmt.Printf("Peer %s rejected block, requesting chain from peer\n", peer)
+				n.RequestChain(peer)
+			}
+			if err.Error() == "invalid block index" {
+				fmt.Printf("Peer %s rejected block, requesting chain from peer\n", peer)
+				n.RequestChain(peer)
+			} else {
+				fmt.Printf("Error sending block to peer %s: %v\n", peer, err)
+			}
+		}
+		errs = append(errs, err)
 	}
+
+	for _, err := range errs {
+		if err != nil && (err.Error() == "invalid previous hash" || err.Error() == "invalid block index") {
+			return errors.New("chain replaced with longer chain from peer")
+		}
+	}
+	err := n.PostSetBlock(block)
+	if err != nil {
+		fmt.Printf("Error sending block to peers %v\n", err)
+		return err
+	}
+
+	return nil
 }
 
-func (n *Node) sendBlock(peer string, block *Block) {
+func (n *Node) sendBlock(peer string, block *Block) error {
 	writer := new(bytes.Buffer)
 	err := block.ToJson(writer)
 	if err != nil {
 		fmt.Printf("Error marshaling block: %v\n", err)
-		return
+		return err
 	}
 
 	resp, err := http.Post(fmt.Sprintf("http://%s/receiveBlock", peer), "application/json", bytes.NewBuffer(writer.Bytes()))
 	if err != nil {
 		fmt.Printf("Error sending block to peer %s: %v\n", peer, err)
-		return
+		return err
+	}
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+	if resp.StatusCode == http.StatusBadRequest {
+		return errors.New("could not unmarshal block")
+	}
+	if resp.StatusCode == http.StatusConflict {
+		return errors.New("invalid block index")
+	}
+	if resp.StatusCode == http.StatusNotAcceptable {
+		return errors.New("invalid previous hash")
+
 	}
 	defer resp.Body.Close()
+	return nil
+}
+func (n *Node) PostSetBlock(block *Block) error {
+	writer := new(bytes.Buffer)
+	err := block.ToJson(writer)
+	if err != nil {
+		fmt.Printf("Error marshaling block: %v\n", err)
+	}
+	for _, peer := range n.Peers {
+		resp, err := http.Post(fmt.Sprintf("http://%s/setBlock", peer), "application/json", bytes.NewBuffer(writer.Bytes()))
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return errors.New(fmt.Sprintf("could not set block code: %d", resp.StatusCode))
+		}
+		defer resp.Body.Close()
+	}
+	return nil
 }
 
-func (n *Node) ReceiveBlock(block *Block) {
-	lastBlock := n.Chain.Blocks[len(n.Chain.Blocks)-1]
-
-	if block.Index == lastBlock.Index && block.Timestamp < lastBlock.Timestamp {
-		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
-		n.Chain.Blocks[len(n.Chain.Blocks)-1] = block
-	}
-	if block.Index == lastBlock.Index+1 && n.Chain.IsValidNewBlock(block, lastBlock) {
-		n.Chain.AddBlockFromPeer(block)
-		cancelMining <- struct{}{}
-	} else if block.Index > lastBlock.Index+1 {
-		// We're behind, request the full chain
-		n.RequestChain(n.Peers[0]) // Assuming the first peer is always valid
-	} else {
-		// The received block is behind or invalid, ignore it
-		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
-	}
-}
+//func (n *Node) ReceiveBlock(block *Block) {
+//	lastBlock := n.Chain.Blocks[len(n.Chain.Blocks)-1]
+//
+//	if block.Index == lastBlock.Index && block.Timestamp < lastBlock.Timestamp {
+//		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
+//		n.Chain.Blocks[len(n.Chain.Blocks)-1] = block
+//	}
+//	if block.Index == lastBlock.Index+1 && n.Chain.IsValidNewBlock(block, lastBlock) {
+//		n.Chain.AddBlockFromPeer(block)
+//		cancelMining <- struct{}{}
+//	} else if block.Index > lastBlock.Index+1 {
+//		// We're behind, request the full chain
+//		n.RequestChain(n.Peers[0]) // Assuming the first peer is always valid
+//	} else {
+//		// The received block is behind or invalid, ignore it
+//		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
+//	}
+//}
 
 func (n *Node) RequestChain(peer string) {
 	resp, err := http.Get(fmt.Sprintf("http://%s/chain/%s", peer, n.Address))
@@ -104,14 +164,5 @@ func (n *Node) RequestChain(peer string) {
 	} else {
 		fmt.Println("Chain replaced with new chain from peer\n")
 	}
-
-	if len(newChain.Blocks) > len(n.Chain.Blocks) && newChain.IsValidChain() {
-		err = n.Chain.ReplaceChain(&newChain)
-		if err != nil {
-			fmt.Printf("Error replacing chain: %v\n", err)
-		} else {
-			fmt.Println("Chain replaced with new chain from peer\n")
-			cancelMining <- struct{}{} // Cancel current mining operation
-		}
-	}
+	//cancelMining <- struct{}{}
 }
