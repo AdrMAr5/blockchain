@@ -25,22 +25,34 @@ func NewBlock(index int, data string, previousHash [32]byte) *Block {
 		Data:         data,
 		PreviousHash: previousHash,
 	}
-	block.Mine(Difficulty)
+	err := block.Mine(Difficulty)
+
+	if err != nil {
+		fmt.Printf("Error mining block: %v\n", err)
+		return nil
+	}
+	block.Timestamp = time.Now().Unix()
 	return block
 }
 
-func (b *Block) Mine(difficulty int) {
+func (b *Block) Mine(difficulty int) error {
 	target := new(big.Int).Lsh(big.NewInt(1), uint(256-difficulty))
 
 	for {
-		b.Hash = b.calculateHash()
-		hashInt := new(big.Int).SetBytes(b.Hash[:])
+		select {
+		case <-cancelMining:
+			return fmt.Errorf(`cancel mining`)
+		default:
+			b.Hash = b.calculateHash()
+			hashInt := new(big.Int).SetBytes(b.Hash[:])
 
-		if hashInt.Cmp(target) == -1 {
-			return
+			if hashInt.Cmp(target) == -1 {
+				return nil
+			}
+			b.Nonce++
 		}
-		b.Nonce++
 	}
+
 }
 
 func (b *Block) calculateHash() [32]byte {
@@ -49,8 +61,8 @@ func (b *Block) calculateHash() [32]byte {
 }
 
 func (b *Block) String() string {
-	return fmt.Sprintf("Index: %d, Timestamp: %d, Data: %s, Hash: %x, PrevHash: %x, Nonce: %d",
-		b.Index, b.Timestamp, b.Data, b.Hash, b.PreviousHash, b.Nonce)
+	return fmt.Sprintf("%x, <-%x",
+		b.Hash[len(b.Hash)-4:len(b.Hash)-1], b.PreviousHash[len(b.PreviousHash)-4:len(b.PreviousHash)-1])
 }
 
 func (b *Block) ToJson(writer io.Writer) error {
