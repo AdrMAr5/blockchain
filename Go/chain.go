@@ -7,10 +7,18 @@ import (
 	"sync"
 )
 
+type lastOperation string
+
+const (
+	AddedFromPeer lastOperation = "AddedFromPeer"
+	AddedMined    lastOperation = "AddedMined"
+)
+
 type Chain struct {
-	Blocks     []*Block
-	Candidates []*Block
-	mu         sync.Mutex
+	Blocks        []*Block
+	Candidates    []*Block
+	mu            sync.Mutex
+	lastOperation lastOperation
 }
 
 func NewChain() *Chain {
@@ -32,8 +40,9 @@ func (c *Chain) getCandidateByHash(hash [32]byte) *Block {
 
 func (c *Chain) Print() {
 	for i := 0; i < len(c.Blocks); i++ {
-		fmt.Printf("%d: %s\n", c.Blocks[i].Index, c.Blocks[i].String())
+		fmt.Printf("%s\n", c.Blocks[i].String())
 	}
+	fmt.Printf("last operation: %s\n\n", c.lastOperation)
 }
 
 func (c *Chain) createGenesisBlock() {
@@ -66,10 +75,12 @@ func (c *Chain) createGenesisBlock() {
 //			c.Blocks = append(c.Blocks, block)
 //		}
 //	}
-func (c *Chain) AddBlock(block *Block) {
+func (c *Chain) AddBlock(block *Block, operation lastOperation) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Blocks = append(c.Blocks, block)
+	c.lastOperation = operation
+	c.Print()
 }
 
 func (c *Chain) IsValidNewBlock(newBlock, prevBlock *Block) error {

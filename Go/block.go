@@ -61,7 +61,7 @@ func (b *Block) calculateHash() [32]byte {
 }
 
 func (b *Block) String() string {
-	return fmt.Sprintf("%x, <-%x",
+	return fmt.Sprintf("%d:  %x, <-%x", b.Index,
 		b.Hash[len(b.Hash)-4:len(b.Hash)-1], b.PreviousHash[len(b.PreviousHash)-4:len(b.PreviousHash)-1])
 }
 

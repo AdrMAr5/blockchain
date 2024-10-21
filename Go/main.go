@@ -9,13 +9,16 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-const Difficulty = 22
+const Difficulty = 23
 
 var node *Node
 var cancelMining = make(chan struct{})
 var canMine bool
+var mineLock sync.Mutex
+var mineCondition *sync.Cond
 
 func main() {
 	fmt.Print("Enter the address for this node (e.g., localhost:3000): ")
@@ -34,6 +37,7 @@ func main() {
 
 	node = NewNode(address)
 	canMine = true
+	mineCondition = sync.NewCond(&mineLock)
 
 	go startServer()
 	if address != "localhost:3000" {
@@ -41,27 +45,44 @@ func main() {
 		node.RequestChain("localhost:3000")
 	}
 
+	go miningLoop()
+
+	select {}
+}
+
+func miningLoop() {
 	for {
-
-		if canMine {
-			prevBlock := node.Chain.Blocks[len(node.Chain.Blocks)-1]
-
-			blockData := strconv.Itoa(rand.Int())
-			block := NewBlock(prevBlock.Index+1, blockData, prevBlock.Hash)
-			node.Chain.Candidates = append(node.Chain.Candidates, block)
-			if block != nil {
-				canMine = false
-				err := node.BroadcastAndSetNewBlock(block)
-				if err != nil {
-					fmt.Printf("Error broadcasting block: %v\n", err)
-				} else {
-					node.Chain.AddBlock(block)
-					canMine = true
-					fmt.Println("new block added to candidates and broadcasted to peers")
-				}
-			}
-			node.Chain.Print()
+		mineLock.Lock()
+		for !canMine {
+			mineCondition.Wait()
 		}
+		mineLock.Unlock()
+
+		prevBlock := node.Chain.Blocks[len(node.Chain.Blocks)-1]
+
+		blockData := strconv.Itoa(rand.Int())
+		block := NewBlock(prevBlock.Index+1, blockData, prevBlock.Hash)
+		node.Chain.Candidates = append(node.Chain.Candidates, block)
+		if block != nil {
+			setCanMine(false)
+			err := node.BroadcastAndSetNewBlock(block)
+			if err != nil {
+				fmt.Printf("Error broadcasting block: %v\n", err)
+			} else {
+				node.Chain.AddBlock(block, AddedMined)
+				setCanMine(true)
+				//fmt.Println("new block added to candidates and broadcasted to peers")
+			}
+		}
+	}
+}
+
+func setCanMine(value bool) {
+	mineLock.Lock()
+	canMine = value
+	mineLock.Unlock()
+	if value {
+		mineCondition.Signal()
 	}
 }
 
@@ -77,10 +98,9 @@ func startServer() {
 	}
 }
 
-// cheks if block can be added and return appropirate error
 func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("Received block from peer %s", r.PathValue("host"))
-	canMine = false
+	//fmt.Printf("Received block from peer %s", r.PathValue("host"))
+	setCanMine(false)
 	cancelMining <- struct{}{}
 	var block Block
 	err := block.FromJson(r.Body)
@@ -89,7 +109,7 @@ func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	node.Chain.Candidates = append(node.Chain.Candidates, &block)
-	fmt.Printf("received block added to candidates, %v\n", block)
+	fmt.Printf("received block added to candidates, %v\n", block.String())
 	err = node.Chain.IsValidNewBlock(&block, node.Chain.Blocks[len(node.Chain.Blocks)-1])
 	if err != nil {
 		if err.Error() == "my chain is longer" {
@@ -118,7 +138,6 @@ func handleGetChain(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// this endpoint is used force to add this block to blockchain
 func handleSetBlock(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Received setBlock from peer\n")
 	var block Block
@@ -127,14 +146,9 @@ func handleSetBlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	//fromCandidates := node.Chain.getCandidateByHash(block.Hash)
-	//if fromCandidates == nil {
-	//	http.Error(w, "block not found in candidates", http.StatusNotFound)
-	//	return
-	//}
-	node.Chain.AddBlock(&block)
-	canMine = true
-	fmt.Println("block added to blockchain")
+	node.Chain.AddBlock(&block, AddedFromPeer)
+	setCanMine(true)
+	//fmt.Println("block added to blockchain")
 	w.WriteHeader(http.StatusOK)
 }
 
