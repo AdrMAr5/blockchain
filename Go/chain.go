@@ -50,31 +50,6 @@ func (c *Chain) createGenesisBlock() {
 	c.Blocks = append(c.Blocks, genesisBlock)
 }
 
-//	func (c *Chain) AddBlock(data string) *Block {
-//		c.mu.Lock()
-//		defer c.mu.Unlock()
-//		prevBlock := c.Blocks[len(c.Blocks)-1]
-//		newBlock := NewBlock(prevBlock.Index+1, data, prevBlock.Hash)
-//		if newBlock == nil {
-//			return nil
-//		}
-//		if c.IsValidNewBlock(newBlock, prevBlock) {
-//			c.Blocks = append(c.Blocks, newBlock)
-//			fmt.Printf("Adding my mined block %d\n", newBlock.Index)
-//			return newBlock
-//		}
-//		return nil
-//	}
-//
-//	func (c *Chain) AddBlockFromPeer(block *Block) {
-//		fmt.Printf("Adding block from peer, %d\n", block.Index)
-//		c.mu.Lock()
-//		defer c.mu.Unlock()
-//		prevBlock := c.Blocks[len(c.Blocks)-1]
-//		if err := c.IsValidNewBlock(block, prevBlock); err == nil {
-//			c.Blocks = append(c.Blocks, block)
-//		}
-//	}
 func (c *Chain) AddBlock(block *Block, operation lastOperation) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -101,19 +76,7 @@ func (c *Chain) IsValidNewBlock(newBlock, prevBlock *Block) error {
 	return nil
 }
 
-//func (c *Chain) IsValidChain() bool {
-//	for i := 1; i < len(c.Blocks); i++ {
-//		if !c.IsValidNewBlock(c.Blocks[i], c.Blocks[i-1]) {
-//			return false
-//		}
-//	}
-//	return true
-//}
-
 func (c *Chain) ReplaceChain(newChain *Chain) error {
-	//if !newChain.IsValidChain() {
-	//	return errors.New("invalid chain")
-	//}
 	c.mu.Lock()
 	c.Blocks = newChain.Blocks
 	c.mu.Unlock()

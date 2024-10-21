@@ -113,29 +113,10 @@ func (n *Node) PostSetBlock(block *Block) error {
 		if resp.StatusCode != http.StatusOK {
 			return errors.New(fmt.Sprintf("could not set block code: %d", resp.StatusCode))
 		}
-		defer resp.Body.Close()
+		resp.Body.Close()
 	}
 	return nil
 }
-
-//func (n *Node) ReceiveBlock(block *Block) {
-//	lastBlock := n.Chain.Blocks[len(n.Chain.Blocks)-1]
-//
-//	if block.Index == lastBlock.Index && block.Timestamp < lastBlock.Timestamp {
-//		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
-//		n.Chain.Blocks[len(n.Chain.Blocks)-1] = block
-//	}
-//	if block.Index == lastBlock.Index+1 && n.Chain.IsValidNewBlock(block, lastBlock) {
-//		n.Chain.AddBlockFromPeer(block)
-//		cancelMining <- struct{}{}
-//	} else if block.Index > lastBlock.Index+1 {
-//		// We're behind, request the full chain
-//		n.RequestChain(n.Peers[0]) // Assuming the first peer is always valid
-//	} else {
-//		// The received block is behind or invalid, ignore it
-//		fmt.Printf("Received invalid or outdated block: %s\n", block.String())
-//	}
-//}
 
 func (n *Node) RequestChain(peer string) {
 	resp, err := http.Get(fmt.Sprintf("http://%s/chain/%s", peer, n.Address))
@@ -164,5 +145,4 @@ func (n *Node) RequestChain(peer string) {
 	} else {
 		fmt.Println("Chain replaced with new chain from peer\n")
 	}
-	//cancelMining <- struct{}{}
 }

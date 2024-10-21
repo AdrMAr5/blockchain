@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -71,7 +70,6 @@ func miningLoop() {
 			} else {
 				node.Chain.AddBlock(block, AddedMined)
 				setCanMine(true)
-				//fmt.Println("new block added to candidates and broadcasted to peers")
 			}
 		}
 	}
@@ -148,13 +146,5 @@ func handleSetBlock(w http.ResponseWriter, r *http.Request) {
 	}
 	node.Chain.AddBlock(&block, AddedFromPeer)
 	setCanMine(true)
-	//fmt.Println("block added to blockchain")
 	w.WriteHeader(http.StatusOK)
-}
-
-func printBlockchain() {
-	for _, block := range node.Chain.Blocks {
-		fmt.Println(strings.Repeat("=", 50))
-		fmt.Println(block)
-	}
 }
