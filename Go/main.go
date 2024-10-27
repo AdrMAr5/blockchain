@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 )
 
 const Difficulty = 23
@@ -33,6 +34,9 @@ func main() {
 	if address == "2" {
 		address = "localhost:3002"
 	}
+	if address == "3" {
+		address = "localhost:3003"
+	}
 
 	node = NewNode(address)
 	canMine = true
@@ -40,7 +44,7 @@ func main() {
 
 	go startServer()
 	if address != "localhost:3000" {
-		node.AddPeer("localhost:3000")
+		node.JoinNetwork("localhost:3000")
 		node.RequestChain("localhost:3000")
 	}
 
@@ -61,8 +65,8 @@ func miningLoop() {
 
 		blockData := strconv.Itoa(rand.Int())
 		block := NewBlock(prevBlock.Index+1, blockData, prevBlock.Hash)
-		node.Chain.Candidates = append(node.Chain.Candidates, block)
 		if block != nil {
+			node.Chain.Candidates = append(node.Chain.Candidates, block)
 			setCanMine(false)
 			err := node.BroadcastAndSetNewBlock(block)
 			if err != nil {
@@ -88,6 +92,8 @@ func startServer() {
 	http.HandleFunc("POST /receiveBlock/{host}", handleReceiveBlock)
 	http.HandleFunc("POST /setBlock", handleSetBlock)
 	http.HandleFunc("GET /chain/{host}", handleGetChain)
+	http.HandleFunc("POST /join/{host}", handleJoinNetwork)
+	http.HandleFunc("POST /addPeer", handleAddPeer)
 
 	fmt.Printf("Starting server on %s\n", node.Address)
 	err := http.ListenAndServe(node.Address, nil)
@@ -96,10 +102,11 @@ func startServer() {
 	}
 }
 
+// handleReceiveBlock handles reception of a new block from a peer
 func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
-	//fmt.Printf("Received block from peer %s", r.PathValue("host"))
-	setCanMine(false)
+	fmt.Printf("%s: Received receiveBlock from peer\n", time.Now().String())
 	cancelMining <- struct{}{}
+	setCanMine(false)
 	var block Block
 	err := block.FromJson(r.Body)
 	if err != nil {
@@ -123,9 +130,26 @@ func handleReceiveBlock(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotAcceptable)
 			return
 		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+	w.WriteHeader(http.StatusOK)
 }
 
+// handleSetBlock handles a set block request from a peer
+func handleSetBlock(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("%s: Received setBlock from peer\n", time.Now().String())
+	var block Block
+	err := block.FromJson(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	node.Chain.AddBlock(&block, AddedFromPeer)
+	setCanMine(true)
+	w.WriteHeader(http.StatusOK)
+}
+
+// handleGetChain handles a get chain request from a peer
 func handleGetChain(w http.ResponseWriter, r *http.Request) {
 	srcHost := r.PathValue("host")
 
@@ -136,15 +160,32 @@ func handleGetChain(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleSetBlock(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("Received setBlock from peer\n")
-	var block Block
-	err := block.FromJson(r.Body)
+// handleJoinNetwork handles a join network request from a new peer
+func handleJoinNetwork(w http.ResponseWriter, r *http.Request) {
+	srcHost := r.PathValue("host")
+	fmt.Printf("Received join request from %s\n", srcHost)
+	data := map[string][]string{
+		"peers": node.Peers,
+	}
+	data["peers"] = append(data["peers"], node.Address)
+	node.NotifyNetwork(srcHost)
+	node.AddPeer(srcHost)
+	err := json.NewEncoder(w).Encode(data)
+	if err != nil {
+		fmt.Printf("Error encoding peers: %v\n", err)
+	}
+}
+
+// handleAddPeer handles a request from current network member to add a new peer
+func handleAddPeer(w http.ResponseWriter, r *http.Request) {
+	var data map[string]string
+	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	node.Chain.AddBlock(&block, AddedFromPeer)
-	setCanMine(true)
+	newPeer := data["peer"]
+	fmt.Printf("Received addPeer request, new peer: %s\n", newPeer)
+	node.AddPeer(newPeer)
 	w.WriteHeader(http.StatusOK)
 }

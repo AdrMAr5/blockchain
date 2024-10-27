@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"slices"
 	"sync"
+	"time"
 )
 
 type Node struct {
@@ -23,6 +24,39 @@ func NewNode(address string) *Node {
 		Address: address,
 		Chain:   NewChain(),
 		Peers:   make([]string, 0),
+	}
+}
+func (n *Node) JoinNetwork(peer string) {
+	res, err := http.Post(fmt.Sprintf("http://%s/join/%s", peer, n.Address), "application/json", nil)
+	if err != nil {
+		fmt.Printf("Error joining network: %v\n", err)
+		return
+	}
+	if res.StatusCode != http.StatusOK {
+		fmt.Printf("Error joining network: %d\n", res.StatusCode)
+		return
+	}
+	var data map[string][]string
+	json.NewDecoder(res.Body).Decode(&data)
+	for _, peer := range data["peers"] {
+		n.AddPeer(peer)
+	}
+	fmt.Printf("Joined network with peers: %v\n", n.Peers)
+}
+func (n *Node) NotifyNetwork(newPeer string) {
+	body := map[string]string{"peer": newPeer}
+	writer := new(bytes.Buffer)
+	json.NewEncoder(writer).Encode(body)
+	for _, peer := range n.Peers {
+		res, err := http.Post(fmt.Sprintf("http://%s/addPeer", peer), "application/json", writer)
+		if err != nil {
+			fmt.Printf("Error notifying network: %v\n", err)
+			return
+		}
+		if res.StatusCode != http.StatusOK {
+			fmt.Printf("Error notifying network: %d\n", res.StatusCode)
+			return
+		}
 	}
 }
 
@@ -57,7 +91,7 @@ func (n *Node) BroadcastAndSetNewBlock(block *Block) error {
 	}
 
 	for _, err := range errs {
-		if err != nil && (err.Error() == "invalid previous hash" || err.Error() == "invalid block index") {
+		if err != nil {
 			return errors.New("chain replaced with longer chain from peer")
 		}
 	}
@@ -100,6 +134,7 @@ func (n *Node) sendBlock(peer string, block *Block) error {
 	return nil
 }
 func (n *Node) PostSetBlock(block *Block) error {
+	fmt.Printf("%s: Sending set block to peers, block: %s\n", time.Now().String(), block.String())
 	writer := new(bytes.Buffer)
 	err := block.ToJson(writer)
 	if err != nil {
