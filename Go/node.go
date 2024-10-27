@@ -44,10 +44,10 @@ func (n *Node) JoinNetwork(peer string) {
 	fmt.Printf("Joined network with peers: %v\n", n.Peers)
 }
 func (n *Node) NotifyNetwork(newPeer string) {
-	body := map[string]string{"peer": newPeer}
-	writer := new(bytes.Buffer)
-	json.NewEncoder(writer).Encode(body)
+	data := map[string]string{"peer": newPeer}
 	for _, peer := range n.Peers {
+		writer := new(bytes.Buffer)
+		json.NewEncoder(writer).Encode(data)
 		res, err := http.Post(fmt.Sprintf("http://%s/addPeer", peer), "application/json", writer)
 		if err != nil {
 			fmt.Printf("Error notifying network: %v\n", err)

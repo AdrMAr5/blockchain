@@ -187,5 +187,6 @@ func handleAddPeer(w http.ResponseWriter, r *http.Request) {
 	newPeer := data["peer"]
 	fmt.Printf("Received addPeer request, new peer: %s\n", newPeer)
 	node.AddPeer(newPeer)
+	fmt.Printf("current peers: %v\n", node.Peers)
 	w.WriteHeader(http.StatusOK)
 }
